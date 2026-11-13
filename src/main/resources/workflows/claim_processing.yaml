@@ -1,0 +1,86 @@
+name: claim_processing
+version: "1.0.0"
+maxRetries: 2
+dependencies:
+  - verificationService
+
+inputSchema:
+  claimId:
+    type: STRING
+    required: true
+  policyNumber:
+    type: STRING
+    required: true
+  claimAmount:
+    type: DECIMAL
+    required: true
+  incidentType:
+    type: STRING
+    required: true
+  policeReportFiled:
+    type: BOOLEAN
+    required: true
+
+stages:
+  - id: VALIDATION
+    name: "Claim Data Verification"
+  - id: ADJUDICATION
+    name: "Claim Adjudication Rules"
+
+routing:
+  defaultOutcome: APPROVED
+  failureOutcome: REJECTED
+
+ruleSteps:
+  - id: rule-policy-number-present
+    stage: VALIDATION
+    description: "Policy number must not be empty"
+    field: policyNumber
+    operator: not_empty
+    onFailure: REJECT
+    failureReason: "Policy number is mandatory"
+
+  - id: rule-valid-incident-type
+    stage: VALIDATION
+    description: "Incident type must be one of ACCIDENT, THEFT, WEATHER, VANDALISM"
+    field: incidentType
+    operator: in
+    value:
+      - ACCIDENT
+      - THEFT
+      - WEATHER
+      - VANDALISM
+    onFailure: REJECT
+    failureReason: "Incident type is not covered by standard policy provisions"
+
+  - id: rule-positive-claim-amount
+    stage: ADJUDICATION
+    description: "Claim amount must be greater than zero"
+    field: claimAmount
+    operator: ">"
+    value: 0
+    onFailure: REJECT
+    failureReason: "Claim amount must be strictly greater than 0"
+
+  - id: rule-max-auto-claim-amount
+    stage: ADJUDICATION
+    description: "Claims over 100000 require claims adjuster manual review"
+    field: claimAmount
+    operator: "<="
+    value: 100000
+    onFailure: MANUAL_REVIEW
+    failureReason: "Claim amount exceeds 100000 threshold for automatic settlement"
+
+  - id: rule-theft-police-report-mandatory
+    stage: ADJUDICATION
+    description: "Theft claims require a police report to be filed"
+    field: policeReportFiled
+    operator: "=="
+    value: true
+    when:
+      field: incidentType
+      operator: "=="
+      value: "THEFT"
+    onFailure: REJECT
+    failureReason: "Police report is mandatory for all theft claims"
+

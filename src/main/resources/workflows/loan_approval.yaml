@@ -1,0 +1,94 @@
+name: loan_approval
+version: "1.0.0"
+maxRetries: 3
+dependencies:
+  - verificationService
+
+inputSchema:
+  applicantId:
+    type: STRING
+    required: true
+  creditScore:
+    type: INTEGER
+    required: true
+  annualIncome:
+    type: DECIMAL
+    required: true
+  loanAmount:
+    type: DECIMAL
+    required: true
+  employmentStatus:
+    type: STRING
+    required: true
+  requestedTermMonths:
+    type: INTEGER
+    required: false
+
+stages:
+  - id: ELIGIBILITY
+    name: "Applicant Eligibility Check"
+  - id: RISK_ASSESSMENT
+    name: "Risk & Policy Assessment"
+
+routing:
+  defaultOutcome: APPROVED
+  failureOutcome: REJECTED
+
+ruleSteps:
+  - id: rule-applicant-id-present
+    stage: ELIGIBILITY
+    description: "Applicant ID must be present"
+    field: applicantId
+    operator: not_empty
+    onFailure: REJECT
+    failureReason: "Applicant ID cannot be empty"
+
+  - id: rule-positive-loan-amount
+    stage: ELIGIBILITY
+    description: "Loan amount must be strictly positive"
+    field: loanAmount
+    operator: ">"
+    value: 0
+    onFailure: REJECT
+    failureReason: "Loan amount must be greater than zero"
+
+  - id: rule-min-credit-score
+    stage: RISK_ASSESSMENT
+    description: "Credit score must meet minimum threshold of 600"
+    field: creditScore
+    operator: ">="
+    value: 600
+    onFailure: REJECT
+    failureReason: "Credit score is below the mandatory cutoff of 600"
+
+  - id: rule-min-income
+    stage: RISK_ASSESSMENT
+    description: "Annual income must be at least 25000"
+    field: annualIncome
+    operator: ">="
+    value: 25000
+    onFailure: REJECT
+    failureReason: "Annual income is below the minimum required threshold of 25000"
+
+  - id: rule-high-loan-manual-review
+    stage: RISK_ASSESSMENT
+    description: "Loan amounts exceeding 500000 require manual underwriter review"
+    field: loanAmount
+    operator: "<="
+    value: 500000
+    onFailure: MANUAL_REVIEW
+    failureReason: "Loan amount exceeds auto-approval ceiling of 500000; routed to underwriter"
+
+  - id: rule-self-employed-credit-threshold
+    stage: RISK_ASSESSMENT
+    description: "Self-employed applicants with credit score under 720 require underwriter review"
+    field: creditScore
+    operator: ">="
+    value: 720
+    when:
+      field: employmentStatus
+      operator: "=="
+      value: "SELF_EMPLOYED"
+    onFailure: MANUAL_REVIEW
+    failureReason: "Self-employed applicant credit score below 720; requires underwriter verification"
+
